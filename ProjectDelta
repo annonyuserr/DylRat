@@ -3,7 +3,6 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 local Camera = workspace.CurrentCamera
@@ -24,7 +23,7 @@ local Options = {
     hp_bar = true, box = true, distance = true, inventory_bar = false,
     box_fill = false, box_fill_color = Color3.fromRGB(170, 0, 255), box_fill_transparency = 0.5,
     
-    -- NPC / AI Options
+    -- NPC / AI Options (Sincronizadas por completo)
     npc_nametag = true, npc_chams = true, npc_skeleton = true, npc_hp_text = true,
     npc_hp_bar = true, npc_box = true, npc_distance = true,
     npc_box_fill = false, npc_box_fill_color = Color3.fromRGB(255, 50, 50), npc_box_fill_transparency = 0.5,
@@ -79,7 +78,10 @@ local Options = {
     sv_silent_aim_fov = false, sv_filled_fov = false, sv_fov_transparency = 0.1,
     sv_lerp_visuals = false, sv_fov_outline = false, sv_fov_outline_color = Color3.fromRGB(0, 0, 0),
     sv_fov_filled_color = Color3.fromRGB(255, 0, 128), sv_fov_circle_size = 200,
-    sv_fov_circle_color = Color3.fromRGB(255, 255, 255)
+    sv_fov_circle_color = Color3.fromRGB(255, 255, 255),
+
+    -- CAMERA / ZOOM OPTIONS
+    zoom_enabled = false, zoom_key = "Z", zoom_fov = 30
 }
 
 local ESP_Cache = {}
@@ -117,41 +119,33 @@ local function AddOutline(parent)
 end
 
 -- ==========================================================
--- GUIS PRINCIPALES DE ALMACENAMIENTO (CORE GUI)
+-- SISTEMA DE ALMACENAMIENTO DE OBJETOS ESP E INVENTORY BAR
 -- ==========================================================
 local MasterESP = Instance.new("ScreenGui", game:GetService("CoreGui")); MasterESP.Name = "MasterESP"; MasterESP.IgnoreGuiInset = true; MasterESP.DisplayOrder = 9999998
 local PetalMenuGui = Instance.new("ScreenGui", game:GetService("CoreGui")); PetalMenuGui.Name = "PetalMenuGui"; PetalMenuGui.ResetOnSpawn = false; PetalMenuGui.IgnoreGuiInset = true; PetalMenuGui.DisplayOrder = 9999999
 
--- Contenedor de Barra de Inventario en Formato Scrolling (Soporta infinitos items sin romperse)
-local InvBarContainer = Instance.new("ScrollingFrame", MasterESP)
-InvBarContainer.Size = UDim2.new(0, 680, 0, 60)
-InvBarContainer.Position = UDim2.new(0.5, -340, 0, 45)
+-- Elementos de la Barra de Inventario
+local InvBarContainer = Instance.new("Frame", MasterESP)
+InvBarContainer.Size = UDim2.new(1, 0, 0, 30)
+InvBarContainer.Position = UDim2.new(0, 0, 0, 40)
 InvBarContainer.BackgroundTransparency = 1
-InvBarContainer.BorderSizePixel = 0
-InvBarContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
-InvBarContainer.ScrollBarThickness = 2
-InvBarContainer.ScrollBarImageColor3 = Options.accent_color
 InvBarContainer.Visible = false
-RegisterAccentObject(InvBarContainer, "ScrollBarImageColor3")
 
 local InvLayout = Instance.new("UIListLayout", InvBarContainer)
 InvLayout.FillDirection = Enum.FillDirection.Horizontal
-InvLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-InvLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+InvLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 InvLayout.Padding = UDim.new(0, 5)
 
--- Círculo indicador sobre el jugador seleccionado
 local TargetCircle = Instance.new("Frame", MasterESP)
-TargetCircle.Size = UDim2.new(0, 35, 0, 35)
+TargetCircle.Size = UDim2.new(0, 30, 0, 30)
 TargetCircle.AnchorPoint = Vector2.new(0.5, 0.5)
-TargetCircle.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-TargetCircle.BackgroundTransparency = 0.6
+TargetCircle.BackgroundColor3 = Color3.new(1, 1, 1)
+TargetCircle.BackgroundTransparency = 0.8
 TargetCircle.Visible = false
 Instance.new("UICorner", TargetCircle).CornerRadius = UDim.new(1, 0)
 local CircleStroke = Instance.new("UIStroke", TargetCircle)
-CircleStroke.Color = Options.accent_color
+CircleStroke.Color = Color3.new(1, 1, 1)
 CircleStroke.Thickness = 1.5
-RegisterAccentObject(CircleStroke, "Color")
 
 local function CreateESP(target)
     local data = {}
@@ -587,7 +581,7 @@ AutoLoadBox.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================================
--- WORLD TAB SETTINGS
+-- WORLD TAB SETTINGS & CAMERA MODS
 -- ==========================================================
 local Wor_L = Instance.new("Frame", WorldPage); Wor_L.BackgroundTransparency = 1; Wor_L.Size = UDim2.new(0.5, -5, 1, 0)
 local Wor_R = Instance.new("Frame", WorldPage); Wor_R.BackgroundTransparency = 1; Wor_R.Size = UDim2.new(0.5, -5, 1, 0); Wor_R.Position = UDim2.new(0.5, 5, 0, 0)
@@ -609,11 +603,50 @@ local TimeSec = CreateSection(Wor_L, "Time Changer", 1, 100, 0, 275)
 CreateCheckbox(TimeSec, "time_changer_enabled", "Time Changer", 2, false)
 CreateSlider(TimeSec, "time_value", "Time", 0, 24000, 40, false)
 
+-- NUEVA SECCIÓN: CONTROL DE CÁMARA (ZOOM)
+local CameraSec = CreateSection(Wor_R, "Camera Mods", 1, 110, 0, 0)
+CreateCheckbox(CameraSec, "zoom_enabled", "Enable Zoom", 2, false)
+CreateKeybind(CameraSec, "zoom_key", "Zoom Keybind", 32)
+CreateSlider(CameraSec, "zoom_fov", "Zoom FOV Amount", 30, 120, 62, false)
+
+-- ==========================================================
+-- SISTEMA DE ENTRADA TECLAS (ZOOM Y MENÚ)
+-- ==========================================================
+local originalFov = 70
+local isZooming = false
+
 UserInputService.InputBegan:Connect(function(input, processed)
     if not processed then
-        local success, allowedKey = pcall(function() return Enum.KeyCode[Options.menu_key] end)
-        if success and input.KeyCode == allowedKey then
+        -- Toggle del Menú
+        local successMenu, allowedMenuKey = pcall(function() return Enum.KeyCode[Options.menu_key] end)
+        if successMenu and input.KeyCode == allowedMenuKey then
             MainFrame.Visible = not MainFrame.Visible; ColorPickerFrame.Visible = false; DropdownFrame.Visible = false
+        end
+        
+        -- Lógica del Zoom
+        if Options.zoom_enabled then
+            local successZoom, allowedZoomKey = pcall(function() return Enum.KeyCode[Options.zoom_key] end)
+            if successZoom and input.KeyCode == allowedZoomKey then
+                local cam = workspace.CurrentCamera
+                if cam then
+                    isZooming = true
+                    originalFov = cam.FieldOfView
+                    cam.FieldOfView = Options.zoom_fov
+                end
+            end
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, processed)
+    if Options.zoom_enabled and isZooming then
+        local successZoom, allowedZoomKey = pcall(function() return Enum.KeyCode[Options.zoom_key] end)
+        if successZoom and input.KeyCode == allowedZoomKey then
+            local cam = workspace.CurrentCamera
+            if cam then
+                isZooming = false
+                cam.FieldOfView = originalFov
+            end
         end
     end
 end)
@@ -683,82 +716,49 @@ task.spawn(function()
 end)
 
 -- ==========================================================
--- ACTUALIZACIÓN DE BARRA DE INVENTARIO (REAL PATH DESDE REPLICATED)
+-- FUNCIÓN PARA ACTUALIZAR LA BARRA DE INVENTARIO
 -- ==========================================================
 local currentInvTarget = nil
 local lastInvRefresh = 0
 
 local function RefreshInventoryBar(targetPlayer)
-    -- Limpieza total de slots anteriores
+    -- Limpiamos los ítems actuales
     for _, child in ipairs(InvBarContainer:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
     end
 
     if not targetPlayer then return end
-    
-    -- BUSQUEDA EN LA RUTA REAL SEGÚN TUS CAPTURAS DE REPLICATEDSTORAGE
-    local repPlayers = ReplicatedStorage:FindFirstChild("Players")
-    if not repPlayers then return end
-    
-    local targetFolder = repPlayers:FindFirstChild(targetPlayer.Name)
-    if not targetFolder then return end
-    
-    local inv = targetFolder:FindFirstChild("Inventory")
+    local inv = targetPlayer:FindFirstChild("Inventory")
     if not inv then return end
 
-    local slotCount = 0
-
-    -- Recorremos dinámicamente TODO lo que el jugador tiene en su base de datos real
+    -- Rellenamos con lo nuevo
     for _, item in ipairs(inv:GetChildren()) do
         local hasItem = false
-        local itemText = ""
-        
-        if item:IsA("BoolValue") and item.Value == true then 
-            hasItem = true
-            itemText = item.Name
-        elseif (item:IsA("IntValue") or item:IsA("NumberValue")) and item.Value > 0 then 
-            hasItem = true
-            itemText = item.Name .. "\n(" .. tostring(item.Value) .. ")"
-        elseif item:IsA("StringValue") and item.Value ~= "" then
-            hasItem = true
-            itemText = item.Value
-        end
+        if item:IsA("BoolValue") and item.Value == true then hasItem = true end
+        if (item:IsA("IntValue") or item:IsA("NumberValue")) and item.Value > 0 then hasItem = true end
 
         if hasItem then
-            slotCount = slotCount + 1
-            
-            -- Cuadro del slot principal (Diseño oscuro translúcido compacto de la captura)
             local slot = Instance.new("Frame", InvBarContainer)
-            slot.Size = UDim2.new(0, 48, 0, 48)
-            slot.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
-            slot.BackgroundTransparency = 0.15
+            slot.Size = UDim2.new(0, 60, 0, 25)
+            slot.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
             slot.BorderSizePixel = 0
-            
-            local slotStroke = Instance.new("UIStroke", slot)
-            slotStroke.Color = Color3.fromRGB(50, 50, 50)
-            slotStroke.Thickness = 1
-            slotStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            AddOutline(slot)
 
-            -- Texto estilizado para el nombre limpio de los ítems
             local lbl = Instance.new("TextLabel", slot)
-            lbl.Size = UDim2.new(1, -4, 1, -4)
-            lbl.Position = UDim2.new(0, 2, 0, 2)
+            lbl.Size = UDim2.new(1, 0, 1, 0)
             lbl.BackgroundTransparency = 1
-            lbl.TextColor3 = Color3.fromRGB(225, 225, 225)
+            lbl.TextColor3 = Color3.new(1, 1, 1)
             lbl.Font = Enum.Font.Code
-            lbl.TextSize = 8
-            lbl.TextWrapped = true
-            lbl.TextXAlignment = Enum.TextXAlignment.Center
-            lbl.TextYAlignment = Enum.TextYAlignment.Center
+            lbl.TextSize = 11
             
-            -- Limpieza de prefijos del sistema para maximizar legibilidad en el slot
-            local cleanName = itemText:gsub("Clothing", ""):gsub("Equipment", ""):gsub("Item", ""):gsub("Weapon", "")
-            lbl.Text = cleanName:upper()
+            -- Limpiamos el texto
+            local cleanName = item.Name:gsub("Clothing", ""):gsub("Equipment", ""):gsub("Item", "")
+            if (item:IsA("IntValue") or item:IsA("NumberValue")) and item.Value > 1 then
+                cleanName = cleanName .. " x" .. item.Value
+            end
+            lbl.Text = cleanName
         end
     end
-    
-    -- Ajuste dinámico de tamaño para habilitar scroll si la persona está cargada de cosas
-    InvBarContainer.CanvasSize = UDim2.new(0, slotCount * 53, 0, 0)
 end
 
 -- ==========================================================
@@ -793,7 +793,7 @@ RunService.RenderStepped:Connect(function()
             local factor = math.clamp(curHp / maxHp, 0, 1)
             local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
             
-            -- CHAMS
+            -- LÓGICA DE CHAMS INDEPENDIENTE
             local optChams = if isNpc then Options.npc_chams else Options.chams
             if optChams and curHp > 0 then
                 data.Chams.Adornee = char
@@ -809,7 +809,7 @@ RunService.RenderStepped:Connect(function()
                 local boxSize = Vector2.new(sizeY / 1.5, sizeY)
                 local boxPos = Vector2.new(pos.X - boxSize.X / 2, pos.Y - boxSize.Y / 2)
                 
-                -- BOX 2D
+                -- LÓGICA DE BOX 2D Y RELLENO
                 local optBox = if isNpc then Options.npc_box else Options.box
                 data.Box.Visible = optBox
                 if optBox then 
@@ -826,7 +826,7 @@ RunService.RenderStepped:Connect(function()
                     end
                 end
                 
-                -- NAMETAG
+                -- LÓGICA DE NAMETAG
                 local optName = if isNpc then Options.npc_nametag else Options.nametag
                 data.Name.Visible = optName
                 if optName then 
@@ -837,7 +837,7 @@ RunService.RenderStepped:Connect(function()
                     data.Name.TextColor3 = GetColor(if isNpc then "npc_nametag_color" else "nametag_color") 
                 end
                 
-                -- HP BAR
+                -- LÓGICA DE HP BAR
                 local optHpBar = if isNpc then Options.npc_hp_bar else Options.hp_bar
                 data.HPBarBack.Visible = optHpBar
                 if optHpBar then 
@@ -851,7 +851,7 @@ RunService.RenderStepped:Connect(function()
                     data.HPBarFill.Visible = false
                 end
                 
-                -- HP TEXT
+                -- LÓGICA DE HP TEXT
                 local optHpText = if isNpc then Options.npc_hp_text else Options.hp_text
                 data.HPText.Visible = optHpText
                 if optHpText then
@@ -862,7 +862,7 @@ RunService.RenderStepped:Connect(function()
                     data.HPText.TextColor3 = GetColor(if isNpc then "npc_hp_text_color" else "hp_text_color")
                 end
                 
-                -- DISTANCIA
+                -- LÓGICA DE DISTANCIA
                 local optDist = if isNpc then Options.npc_distance else Options.distance
                 data.Dist.Visible = optDist
                 if optDist then
@@ -874,7 +874,7 @@ RunService.RenderStepped:Connect(function()
                     data.Dist.TextColor3 = GetColor(if isNpc then "npc_distance_color" else "distance_color")
                 end
                 
-                -- SKELETON
+                -- LÓGICA DE SKELETON
                 local optSkeleton = if isNpc then Options.npc_skeleton else Options.skeleton
                 if optSkeleton then
                     local rigType = hum.RigType.Name
@@ -917,12 +917,12 @@ RunService.RenderStepped:Connect(function()
     end
     
     -- ==========================================================
-    -- SELECCIÓN POR MOUSE E IMPRESIÓN DE INVENTARIO COMPLETO
+    -- LÓGICA DEL INVENTORY CHECKER BAR (Integrada aquí)
     -- ==========================================================
     if Options.inventory_bar then
         local mousePos = Vector2.new(Mouse.X, Mouse.Y)
         local closestTarget = nil
-        local shortestDist = 180 -- Rango de proximidad del ratón
+        local shortestDist = 150 -- Distancia máxima en píxeles
         
         for _, player in ipairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
@@ -943,8 +943,8 @@ RunService.RenderStepped:Connect(function()
             TargetCircle.Visible = true
             InvBarContainer.Visible = true
             
-            -- Refresca cada 0.8s o si cambiaste de objetivo para no generar lag
-            if currentInvTarget ~= closestTarget or (tick() - lastInvRefresh > 0.8) then
+            -- Refrescar inventario si cambiamos de objetivo o cada 1 segundo (para actualizaciones en tiempo real)
+            if currentInvTarget ~= closestTarget or (tick() - lastInvRefresh > 1) then
                 currentInvTarget = closestTarget
                 lastInvRefresh = tick()
                 RefreshInventoryBar(closestTarget)
