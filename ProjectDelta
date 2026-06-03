@@ -1,0 +1,975 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local Camera = workspace.CurrentCamera
+
+-- ==========================================================
+-- TABLA DE HUESOS (SKELETON)
+-- ==========================================================
+local SkeletonBones = {
+    R6 = {{"Head", "Torso"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"}, {"Torso", "Left Leg"}, {"Torso", "Right Leg"}},
+    R15 = {{"Head", "UpperTorso"}, {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"}, {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"}, {"UpperTorso", "LowerTorso"}, {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"}, {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"}}
+}
+
+-- ==========================================================
+-- TABLA CENTRAL DE OPCIONES
+-- ==========================================================
+local Options = {
+    nametag = true, chams = true, skeleton = true, hp_text = true,
+    hp_bar = true, box = true, distance = true, inventory_bar = false,
+    box_fill = false, box_fill_color = Color3.fromRGB(170, 0, 255), box_fill_transparency = 0.5,
+    
+    -- NPC / AI Options
+    npc_nametag = true, npc_chams = true, npc_skeleton = true, npc_hp_text = true,
+    npc_hp_bar = true, npc_box = true, npc_distance = true,
+    npc_box_fill = false, npc_box_fill_color = Color3.fromRGB(255, 50, 50), npc_box_fill_transparency = 0.5,
+    
+    glow_intensity = 5, 
+    name_text_size = 12, distance_text_size = 12, weapon_text_size = 12, hp_bar_width = 2, chams_transparency = 0.5,
+    npc_name_text_size = 12, npc_distance_text_size = 12, npc_hp_bar_width = 2, npc_chams_transparency = 0.5,
+    
+    -- UI Settings
+    performance_mode = false, info_bar = true, menu_key = "RightShift",
+    accent_color = Color3.fromRGB(170, 0, 255), accent_color_rgb = false,
+    
+    -- World Tab Settings
+    no_grass = false, no_leafs = false, no_clouds = false, no_landmines = false,
+    full_brightness = false, no_fog = false, xray = false,
+    xray_key = "F1", xray_mode = "Hold",
+    
+    time_changer_enabled = false, time_value = 12000,
+    cloud_changer_enabled = false, cloud_transparency = 25, cloud_color = Color3.fromRGB(45, 0, 100), cloud_color_rgb = false,
+    ambient_changer_enabled = false, rgb_ambient = false, ambient_rgb_speed = 50, ambient_color = Color3.fromRGB(170, 0, 255),
+    
+    -- Colores ESP Players
+    nametag_color = Color3.fromRGB(255, 255, 255), chams_color = Color3.fromRGB(170, 0, 255),
+    skeleton_color = Color3.fromRGB(255, 255, 255), hp_text_color = Color3.fromRGB(0, 255, 0),
+    box_color = Color3.fromRGB(170, 0, 255), distance_color = Color3.fromRGB(200, 200, 200),
+    
+    -- Colores ESP NPCs
+    npc_nametag_color = Color3.fromRGB(255, 50, 50), npc_box_color = Color3.fromRGB(255, 50, 50),
+    npc_hp_text_color = Color3.fromRGB(255, 50, 50), npc_chams_color = Color3.fromRGB(255, 50, 50),
+    npc_skeleton_color = Color3.fromRGB(255, 255, 255), npc_distance_color = Color3.fromRGB(255, 100, 100),
+
+    -- COMBAT: Silent Aim
+    silent_aim = false, silent_aim_target_part = "Head", silent_aim_visible_check = false,
+    silent_aim_target_ai = false, silent_aim_target_heli = false, silent_aim_hide_visor = false,
+    silent_aim_bullet_tracers = false, silent_aim_tracer_color = Color3.fromRGB(255, 255, 255),
+    silent_aim_tracer_time = 0, silent_aim_whitelist = "-",
+
+    -- COMBAT: Rage
+    rage_autoshoot = false, rage_autoshoot_key = "X", rage_hitscan = false,
+    rage_autoreload = false, rage_autofill = false, rage_instanthit = false,
+    rage_ragebot = false, rage_desync = false, rage_resolver = false,
+
+    -- COMBAT: Gun Mods
+    gun_force_auto = false, gun_no_sway = false, gun_always_grounded = false,
+    gun_always_sprinting = false, gun_rapid_fire = false, gun_instant_aim = false,
+    gun_no_recoil = false, gun_remove_effects = false, gun_remove_headbob = false,
+    gun_multi_bullet = false, gun_bullet_amount = 1,
+
+    -- COMBAT: Screen Visuals
+    sv_target_info = false, sv_target_hotbar = false, sv_indicator = false,
+    sv_follow_mouse = false, sv_target_line = false, sv_target_line_color = Color3.fromRGB(255, 255, 255),
+    sv_silent_aim_fov = false, sv_filled_fov = false, sv_fov_transparency = 0.1,
+    sv_lerp_visuals = false, sv_fov_outline = false, sv_fov_outline_color = Color3.fromRGB(0, 0, 0),
+    sv_fov_filled_color = Color3.fromRGB(255, 0, 128), sv_fov_circle_size = 200,
+    sv_fov_circle_color = Color3.fromRGB(255, 255, 255)
+}
+
+local ESP_Cache = {}
+local DetectedNPCs = {} 
+local ColorSquares = {} 
+local UI_Refresh_Registry = {} 
+local LastStates = {}
+
+local Colors = {
+    Background = Color3.fromRGB(15, 15, 15),
+    Borde = Color3.fromRGB(45, 45, 45), 
+    GrisTexto = Color3.fromRGB(150, 150, 150),
+    TextoClaro = Color3.fromRGB(230, 230, 230),
+    BotonCuerpo = Color3.fromRGB(24, 24, 24)
+}
+
+local AccentObjects = {}
+local function RegisterAccentObject(obj, prop)
+    table.insert(AccentObjects, {Instance = obj, Property = prop})
+end
+
+local function GetColor(key)
+    if Options[key .. "_rgb"] then
+        return Color3.fromHSV((tick() * 0.15) % 1, 1, 1)
+    end
+    return Options[key] or Color3.fromRGB(255, 255, 255)
+end
+
+local function AddOutline(parent)
+    local UIStroke = Instance.new("UIStroke", parent)
+    UIStroke.Color = Colors.Borde
+    UIStroke.Thickness = 1
+    UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    return UIStroke
+end
+
+-- ==========================================================
+-- GUIS PRINCIPALES DE ALMACENAMIENTO (CORE GUI)
+-- ==========================================================
+local MasterESP = Instance.new("ScreenGui", game:GetService("CoreGui")); MasterESP.Name = "MasterESP"; MasterESP.IgnoreGuiInset = true; MasterESP.DisplayOrder = 9999998
+local PetalMenuGui = Instance.new("ScreenGui", game:GetService("CoreGui")); PetalMenuGui.Name = "PetalMenuGui"; PetalMenuGui.ResetOnSpawn = false; PetalMenuGui.IgnoreGuiInset = true; PetalMenuGui.DisplayOrder = 9999999
+
+-- Contenedor de Barra de Inventario en Formato Scrolling (Soporta infinitos items sin romperse)
+local InvBarContainer = Instance.new("ScrollingFrame", MasterESP)
+InvBarContainer.Size = UDim2.new(0, 680, 0, 60)
+InvBarContainer.Position = UDim2.new(0.5, -340, 0, 45)
+InvBarContainer.BackgroundTransparency = 1
+InvBarContainer.BorderSizePixel = 0
+InvBarContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+InvBarContainer.ScrollBarThickness = 2
+InvBarContainer.ScrollBarImageColor3 = Options.accent_color
+InvBarContainer.Visible = false
+RegisterAccentObject(InvBarContainer, "ScrollBarImageColor3")
+
+local InvLayout = Instance.new("UIListLayout", InvBarContainer)
+InvLayout.FillDirection = Enum.FillDirection.Horizontal
+InvLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+InvLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+InvLayout.Padding = UDim.new(0, 5)
+
+-- Círculo indicador sobre el jugador seleccionado
+local TargetCircle = Instance.new("Frame", MasterESP)
+TargetCircle.Size = UDim2.new(0, 35, 0, 35)
+TargetCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+TargetCircle.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+TargetCircle.BackgroundTransparency = 0.6
+TargetCircle.Visible = false
+Instance.new("UICorner", TargetCircle).CornerRadius = UDim.new(1, 0)
+local CircleStroke = Instance.new("UIStroke", TargetCircle)
+CircleStroke.Color = Options.accent_color
+CircleStroke.Thickness = 1.5
+RegisterAccentObject(CircleStroke, "Color")
+
+local function CreateESP(target)
+    local data = {}
+    
+    local Box = Instance.new("Frame", MasterESP); Box.BackgroundTransparency = 1; Box.BorderSizePixel = 0; Box.Visible = false; data.Box = Box
+    local BoxOutline = Instance.new("UIStroke", Box); BoxOutline.Thickness = 1; BoxOutline.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; data.BoxOutline = BoxOutline
+    
+    local Name = Instance.new("TextLabel", MasterESP); Name.BackgroundTransparency = 1; Name.Font = Enum.Font.Code; Name.TextSize = 12; Name.TextColor3 = Color3.new(1,1,1); Name.TextStrokeTransparency = 0.5; Name.Visible = false; data.Name = Name
+    local Dist = Instance.new("TextLabel", MasterESP); Dist.BackgroundTransparency = 1; Dist.Font = Enum.Font.Code; Dist.TextSize = 12; Dist.TextColor3 = Color3.new(1,1,1); Dist.TextStrokeTransparency = 0.5; Dist.Visible = false; data.Dist = Dist
+    
+    local HPBarBack = Instance.new("Frame", MasterESP); HPBarBack.BackgroundColor3 = Color3.fromRGB(0, 0, 0); HPBarBack.BorderSizePixel = 1; HPBarBack.BorderColor3 = Color3.fromRGB(0, 0, 0); HPBarBack.Visible = false; data.HPBarBack = HPBarBack
+    local HPBarFill = Instance.new("Frame", HPBarBack); HPBarFill.BorderSizePixel = 0; HPBarFill.Visible = false; data.HPBarFill = HPBarFill
+    
+    local HPText = Instance.new("TextLabel", MasterESP); HPText.BackgroundTransparency = 1; HPText.Font = Enum.Font.Code; HPText.TextSize = 12; HPText.TextColor3 = Color3.new(1,1,1); HPText.TextStrokeTransparency = 0.5; HPText.Visible = false; data.HPText = HPText
+    
+    local Chams = Instance.new("Highlight")
+    Chams.Name = "ESP_Chams"
+    Chams.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    Chams.OutlineTransparency = 1
+    Chams.Enabled = false
+    Chams.Parent = game:GetService("CoreGui")
+    data.Chams = Chams
+    
+    data.Lines = {}
+    
+    ESP_Cache[target] = data
+    return data
+end
+
+local function CleanESP(target)
+    if ESP_Cache[target] then
+        for _, obj in pairs(ESP_Cache[target]) do
+            if typeof(obj) == "Instance" then 
+                pcall(function() obj:Destroy() end)
+            elseif type(obj) == "table" then 
+                for _, line in pairs(obj) do pcall(function() line:Destroy() end) end 
+            end
+        end
+        ESP_Cache[target] = nil
+    end
+end
+Players.PlayerRemoving:Connect(CleanESP)
+
+-- ==========================================================
+-- ESTRUCTURA INTERFAZ GRÁFICA (UI)
+-- ==========================================================
+local MainFrame = Instance.new("Frame", PetalMenuGui); MainFrame.Name = "MainFrame"; MainFrame.BackgroundColor3 = Colors.Background; MainFrame.Size = UDim2.new(0, 520, 0, 510); MainFrame.Position = UDim2.new(0.5, -260, 0.5, -255); MainFrame.Active = true; MainFrame.Draggable = true
+AddOutline(MainFrame)
+
+local HeaderLabel = Instance.new("TextLabel", MainFrame); HeaderLabel.BackgroundTransparency = 1; HeaderLabel.Text = "Dylrat.lua | Project delta | v1"; HeaderLabel.TextColor3 = Colors.GrisTexto; HeaderLabel.Font = Enum.Font.RobotoMono; HeaderLabel.TextSize = 12; HeaderLabel.TextXAlignment = Enum.TextXAlignment.Left; HeaderLabel.Size = UDim2.new(1, -20, 0, 25); HeaderLabel.Position = UDim2.new(0, 12, 0, 5)
+
+local TabsFrame = Instance.new("Frame", MainFrame); TabsFrame.Name = "TabsFrame"; TabsFrame.BackgroundTransparency = 1; TabsFrame.Size = UDim2.new(1, -20, 0, 25); TabsFrame.Position = UDim2.new(0, 12, 0, 30)
+local TabsLayout = Instance.new("UIListLayout", TabsFrame); TabsLayout.FillDirection = Enum.FillDirection.Horizontal; TabsLayout.SortOrder = Enum.SortOrder.LayoutOrder; TabsLayout.Padding = UDim.new(0, 10)
+
+local PagesContainer = Instance.new("Frame", MainFrame); PagesContainer.Name = "PagesContainer"; PagesContainer.BackgroundTransparency = 1; PagesContainer.Size = UDim2.new(1, -20, 1, -70); PagesContainer.Position = UDim2.new(0, 12, 0, 60)
+
+local VisualPage = Instance.new("ScrollingFrame", PagesContainer); VisualPage.Name = "VisualPage"; VisualPage.BackgroundTransparency = 1; VisualPage.Size = UDim2.new(1, 0, 1, 0); VisualPage.Visible = true; VisualPage.CanvasSize = UDim2.new(0, 0, 0, 545); VisualPage.ScrollBarThickness = 4; VisualPage.ScrollBarImageColor3 = Options.accent_color; RegisterAccentObject(VisualPage, "ScrollBarImageColor3")
+local UISettingsPage = Instance.new("Frame", PagesContainer); UISettingsPage.Name = "UISettingsPage"; UISettingsPage.BackgroundTransparency = 1; UISettingsPage.Size = UDim2.new(1, 0, 1, 0); UISettingsPage.Visible = false
+local WorldPage = Instance.new("Frame", PagesContainer); WorldPage.Name = "WorldPage"; WorldPage.BackgroundTransparency = 1; WorldPage.Size = UDim2.new(1, 0, 1, 0); WorldPage.Visible = false
+local CombatPage = Instance.new("Frame", PagesContainer); CombatPage.Name = "CombatPage"; CombatPage.BackgroundTransparency = 1; CombatPage.Size = UDim2.new(1, 0, 1, 0); CombatPage.Visible = false
+local PlayerPage = Instance.new("Frame", PagesContainer); PlayerPage.Name = "PlayerPage"; PlayerPage.BackgroundTransparency = 1; PlayerPage.Size = UDim2.new(1, 0, 1, 0); PlayerPage.Visible = false
+local MainPage = Instance.new("Frame", PagesContainer); MainPage.Name = "MainPage"; MainPage.BackgroundTransparency = 1; MainPage.Size = UDim2.new(1, 0, 1, 0); MainPage.Visible = false
+
+local TabButtons = {}
+local ActiveTabButton = nil 
+
+local function SetupTab(name, order, targetPage)
+    local TabButton = Instance.new("TextButton", TabsFrame); TabButton.BackgroundTransparency = 1; TabButton.Text = name; TabButton.Font = Enum.Font.Code; TabButton.TextSize = 13; TabButton.LayoutOrder = order; TabButton.Size = UDim2.new(0, #name * 8 + 10, 1, 0)
+    if targetPage == VisualPage then ActiveTabButton = TabButton; TabButton.TextColor3 = Options.accent_color else TabButton.TextColor3 = Colors.GrisTexto end
+    AddOutline(TabButton)
+    TabButton.MouseButton1Click:Connect(function()
+        ActiveTabButton = TabButton
+        for _, btn in ipairs(TabButtons) do btn.TextColor3 = Colors.GrisTexto end
+        VisualPage.Visible = false; UISettingsPage.Visible = false; WorldPage.Visible = false; CombatPage.Visible = false; PlayerPage.Visible = false; MainPage.Visible = false
+        if targetPage then targetPage.Visible = true end
+    end)
+    table.insert(TabButtons, TabButton)
+end
+
+SetupTab("MAIN", 1, MainPage); SetupTab("COMBAT", 2, CombatPage); SetupTab("VISUALS", 3, VisualPage); SetupTab("PLAYER", 4, PlayerPage); SetupTab("UI SETTINGS", 5, UISettingsPage); SetupTab("WORLD", 6, WorldPage)
+
+local function CreateSection(parent, title, sizeX, sizeY, posX, posY)
+    local SectionFrame = Instance.new("Frame", parent); SectionFrame.BackgroundColor3 = Colors.Background; SectionFrame.Size = UDim2.new(sizeX, 0, 0, sizeY); SectionFrame.Position = UDim2.new(posX, 0, 0, posY)
+    AddOutline(SectionFrame) 
+    local SectionTitle = Instance.new("TextLabel", SectionFrame); SectionTitle.BackgroundTransparency = 1; SectionTitle.Text = title; SectionTitle.TextColor3 = Colors.TextoClaro; SectionTitle.Font = Enum.Font.Code; SectionTitle.TextSize = 12; SectionTitle.TextXAlignment = Enum.TextXAlignment.Left; SectionTitle.Size = UDim2.new(1, -10, 0, 18); SectionTitle.Position = UDim2.new(0, 6, 0, 2)
+    local AccentLine = Instance.new("Frame", SectionFrame); AccentLine.BackgroundColor3 = Options.accent_color; AccentLine.BorderSizePixel = 0; AccentLine.Size = UDim2.new(1, 0, 0, 2); AccentLine.Position = UDim2.new(0, 0, 0, 20); RegisterAccentObject(AccentLine, "BackgroundColor3")
+    local Content = Instance.new("Frame", SectionFrame); Content.Name = "Content"; Content.BackgroundTransparency = 1; Content.Size = UDim2.new(1, -12, 1, -26); Content.Position = UDim2.new(0, 6, 0, 24)
+    return Content
+end
+
+-- ==========================================================
+-- COLOR PICKER SYSTEM
+-- ==========================================================
+local ColorPickerFrame = Instance.new("Frame", PetalMenuGui); ColorPickerFrame.Name = "ColorPickerFrame"; ColorPickerFrame.BackgroundColor3 = Colors.Background; ColorPickerFrame.Size = UDim2.new(0, 200, 0, 235); ColorPickerFrame.Visible = false; ColorPickerFrame.ZIndex = 500; AddOutline(ColorPickerFrame)
+local SatValFrame = Instance.new("TextButton", ColorPickerFrame); SatValFrame.Size = UDim2.new(0, 140, 0, 140); SatValFrame.Position = UDim2.new(0, 10, 0, 10); SatValFrame.Text = ""; SatValFrame.AutoButtonColor = false; SatValFrame.ZIndex = 501; AddOutline(SatValFrame)
+local WhiteGradFrame = Instance.new("Frame", SatValFrame); WhiteGradFrame.Size = UDim2.new(1, 0, 1, 0); WhiteGradFrame.ZIndex = 502; Instance.new("UIGradient", WhiteGradFrame).Transparency = NumberSequence.new(0, 1)
+local BlackGradFrame = Instance.new("Frame", SatValFrame); BlackGradFrame.Size = UDim2.new(1, 0, 1, 0); BlackGradFrame.BackgroundColor3 = Color3.new(0, 0, 0); BlackGradFrame.ZIndex = 503; local Bg = Instance.new("UIGradient", BlackGradFrame); Bg.Rotation = 90; Bg.Transparency = NumberSequence.new(1, 0)
+local PickerCircle = Instance.new("Frame", SatValFrame); PickerCircle.Size = UDim2.new(0, 6, 0, 6); PickerCircle.AnchorPoint = Vector2.new(0.5, 0.5); PickerCircle.BackgroundColor3 = Color3.new(1, 1, 1); PickerCircle.ZIndex = 504; Instance.new("UICorner", PickerCircle)
+local HueFrame = Instance.new("TextButton", ColorPickerFrame); HueFrame.Size = UDim2.new(0, 20, 0, 140); HueFrame.Position = UDim2.new(0, 165, 0, 10); HueFrame.Text = ""; HueFrame.AutoButtonColor = false; HueFrame.ZIndex = 501; AddOutline(HueFrame)
+local Hg = Instance.new("UIGradient", HueFrame); Hg.Rotation = 90; Hg.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,0,0)), ColorSequenceKeypoint.new(0.16, Color3.fromRGB(255,255,0)), ColorSequenceKeypoint.new(0.33, Color3.fromRGB(0,255,0)), ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0,255,255)), ColorSequenceKeypoint.new(0.66, Color3.fromRGB(0,0,255)), ColorSequenceKeypoint.new(0.83, Color3.fromRGB(255,0,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))})
+local HueCircle = Instance.new("Frame", HueFrame); HueCircle.Size = UDim2.new(0, 6, 0, 6); HueCircle.AnchorPoint = Vector2.new(0.5, 0.5); HueCircle.ZIndex = 504; Instance.new("UICorner", HueCircle)
+
+local RgbWrapper = Instance.new("Frame", ColorPickerFrame); RgbWrapper.BackgroundTransparency = 1; RgbWrapper.Size = UDim2.new(1, -20, 0, 24); RgbWrapper.Position = UDim2.new(0, 10, 0, 160); RgbWrapper.ZIndex = 501
+local RgbBox = Instance.new("TextButton", RgbWrapper); RgbBox.BackgroundColor3 = Colors.BotonCuerpo; RgbBox.Text = ""; RgbBox.Size = UDim2.new(0, 14, 0, 14); RgbBox.Position = UDim2.new(0, 0, 0.5, -7); RgbBox.ZIndex = 502; AddOutline(RgbBox)
+local RgbMark = Instance.new("Frame", RgbBox); RgbMark.BackgroundColor3 = Options.accent_color; RgbMark.BorderSizePixel = 0; RgbMark.Size = UDim2.new(1, -6, 1, -6); RgbMark.Position = UDim2.new(0, 3, 0, 3); RgbMark.Visible = false; RgbMark.ZIndex = 503; RegisterAccentObject(RgbMark, "BackgroundColor3")
+local RgbLabel = Instance.new("TextLabel", RgbWrapper); RgbLabel.BackgroundTransparency = 1; RgbLabel.Text = "Efecto RGB (Arcoiris)"; RgbLabel.TextColor3 = Colors.TextoClaro; RgbLabel.Font = Enum.Font.Code; RgbLabel.TextSize = 12; RgbLabel.TextXAlignment = Enum.TextXAlignment.Left; RgbLabel.Position = UDim2.new(0, 22, 0, 0); RgbLabel.Size = UDim2.new(1, -22, 1, 0); RgbLabel.ZIndex = 502
+
+local ClosePickerBtn = Instance.new("TextButton", ColorPickerFrame); ClosePickerBtn.BackgroundColor3 = Colors.BotonCuerpo; ClosePickerBtn.Text = "CERRAR Y GUARDAR"; ClosePickerBtn.TextColor3 = Colors.TextoClaro; ClosePickerBtn.Font = Enum.Font.Code; ClosePickerBtn.TextSize = 11; ClosePickerBtn.Size = UDim2.new(1, -20, 0, 25); ClosePickerBtn.Position = UDim2.new(0, 10, 0, 195); ClosePickerBtn.ZIndex = 501; AddOutline(ClosePickerBtn)
+
+local activeOptionKey, activeColorSquare = nil, nil
+local currentHue, currentSat, currentVal = 0, 1, 1
+
+local function updateColorPickerOutput()
+    local selectedColor = Color3.fromHSV(currentHue, currentSat, currentVal)
+    SatValFrame.BackgroundColor3 = Color3.fromHSV(currentHue, 1, 1)
+    if activeOptionKey and activeColorSquare then Options[activeOptionKey] = selectedColor; activeColorSquare.BackgroundColor3 = selectedColor end
+end
+
+local function trackSatVal(input)
+    local mouseX = math.clamp((input.Position.X - SatValFrame.AbsolutePosition.X) / SatValFrame.AbsoluteSize.X, 0, 1)
+    local mouseY = math.clamp((input.Position.Y - SatValFrame.AbsolutePosition.Y) / SatValFrame.AbsoluteSize.Y, 0, 1)
+    currentSat, currentVal = mouseX, 1 - mouseY; PickerCircle.Position = UDim2.new(mouseX, 0, mouseY, 0); updateColorPickerOutput()
+end
+
+local function trackHue(input)
+    local mouseY = math.clamp((input.Position.Y - HueFrame.AbsolutePosition.Y) / HueFrame.AbsoluteSize.Y, 0, 1)
+    currentHue = mouseY; HueCircle.Position = UDim2.new(0.5, 0, mouseY, 0); updateColorPickerOutput()
+end
+
+local isDragSV, isDragH = false, false
+SatValFrame.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then isDragSV = true; trackSatVal(input) end end)
+HueFrame.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then isDragH = true; trackHue(input) end end)
+UserInputService.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement then if isDragSV then trackSatVal(input) elseif isDragH then trackHue(input) end end end)
+UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then isDragSV = false; isDragH = false end end)
+
+RgbBox.MouseButton1Click:Connect(function()
+    if activeOptionKey then
+        local rgbKey = activeOptionKey .. "_rgb"
+        Options[rgbKey] = not Options[rgbKey]
+        RgbMark.Visible = Options[rgbKey]
+    end
+end)
+
+ClosePickerBtn.MouseButton1Click:Connect(function() ColorPickerFrame.Visible = false end)
+
+local function OpenColorPicker(key, square)
+    if ColorPickerFrame.Visible and activeOptionKey == key then ColorPickerFrame.Visible = false; return end
+    activeOptionKey, activeColorSquare = key, square
+    local cur = Options[key] or Color3.new(1,1,1); currentHue, currentSat, currentVal = cur:ToHSV()
+    SatValFrame.BackgroundColor3 = Color3.fromHSV(currentHue, 1, 1)
+    PickerCircle.Position = UDim2.new(currentSat, 0, 1 - currentVal, 0)
+    HueCircle.Position = UDim2.new(0.5, 0, currentHue, 0)
+    ColorPickerFrame.Position = UDim2.new(0, square.AbsolutePosition.X + 25, 0, square.AbsolutePosition.Y - 5)
+    RgbMark.Visible = Options[key .. "_rgb"] or false
+    ColorPickerFrame.Visible = true
+end
+
+-- ==========================================================
+-- ELEMENTOS DE INTERFAZ (CHECKBOX / SLIDER / KEYBIND / CYCLE)
+-- ==========================================================
+local function CreateCheckbox(parent, optionKey, text, posY, hasColor, customColorKey)
+    local Wrapper = Instance.new("Frame", parent); Wrapper.BackgroundColor3 = Colors.BotonCuerpo; Wrapper.BackgroundTransparency = 0.5; Wrapper.Size = UDim2.new(1, -12, 0, 26); Wrapper.Position = UDim2.new(0, 6, 0, posY); AddOutline(Wrapper)
+    local Box = Instance.new("TextButton", Wrapper); Box.BackgroundColor3 = Colors.BotonCuerpo; Box.Text = ""; Box.Size = UDim2.new(0, 14, 0, 14); Box.Position = UDim2.new(0, 8, 0.5, -7); AddOutline(Box)
+    local Mark = Instance.new("Frame", Box); Mark.BackgroundColor3 = Options.accent_color; Mark.BorderSizePixel = 0; Mark.Size = UDim2.new(1, -6, 1, -6); Mark.Position = UDim2.new(0, 3, 0, 3); Mark.Visible = Options[optionKey] or false
+    RegisterAccentObject(Mark, "BackgroundColor3")
+    local Label = Instance.new("TextLabel", Wrapper); Label.BackgroundTransparency = 1; Label.Text = text; Label.TextColor3 = Colors.TextoClaro; Label.Font = Enum.Font.Code; Label.TextSize = 13; Label.TextXAlignment = Enum.TextXAlignment.Left; Label.Position = UDim2.new(0, 35, 0, 0); Label.Size = UDim2.new(1, -40, 1, 0)
+    
+    local targetKey = customColorKey or (optionKey .. "_color")
+    local Sq
+    if hasColor then
+        Sq = Instance.new("TextButton", Wrapper); Sq.BackgroundColor3 = Options[targetKey]; Sq.Size = UDim2.new(0, 14, 0, 14); Sq.Position = UDim2.new(1, -25, 0.5, -7); Sq.Text = ""; AddOutline(Sq)
+        Sq.MouseButton1Click:Connect(function() OpenColorPicker(targetKey, Sq) end)
+        ColorSquares[targetKey] = Sq 
+    end
+    Box.MouseButton1Click:Connect(function() Options[optionKey] = not Options[optionKey]; Mark.Visible = Options[optionKey] end)
+
+    table.insert(UI_Refresh_Registry, function()
+        Mark.Visible = Options[optionKey] or false
+        if hasColor and Sq then Sq.BackgroundColor3 = Options[targetKey] end
+    end)
+end
+
+local function CreateSlider(parent, optionKey, text, currentVal, maxVal, posY, isFloat)
+    local Wrapper = Instance.new("Frame", parent); Wrapper.BackgroundTransparency = 1; Wrapper.Size = UDim2.new(1, 0, 0, 30); Wrapper.Position = UDim2.new(0, 0, 0, posY)
+    local Label = Instance.new("TextLabel", Wrapper); Label.BackgroundTransparency = 1; Label.Text = text; Label.TextColor3 = Colors.GrisTexto; Label.Font = Enum.Font.Code; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left; Label.Size = UDim2.new(1, 0, 0, 14)
+    local Track = Instance.new("TextButton", Wrapper); Track.BackgroundColor3 = Colors.BotonCuerpo; Track.Size = UDim2.new(1, 0, 0, 8); Track.Position = UDim2.new(0, 0, 0, 16); Track.Text = ""; AddOutline(Track)
+    local Fill = Instance.new("Frame", Track); Fill.BackgroundColor3 = Options.accent_color; Fill.BorderSizePixel = 0; Fill.Size = UDim2.new(Options[optionKey] / maxVal, 0, 1, 0)
+    RegisterAccentObject(Fill, "BackgroundColor3")
+    local ValueLabel = Instance.new("TextLabel", Wrapper); ValueLabel.BackgroundTransparency = 1; ValueLabel.Text = Options[optionKey] .. "/" .. maxVal; ValueLabel.TextColor3 = Colors.GrisTexto; ValueLabel.Font = Enum.Font.Code; ValueLabel.TextSize = 11; ValueLabel.TextXAlignment = Enum.TextXAlignment.Right; ValueLabel.Size = UDim2.new(1, 0, 0, 14)
+    
+    local function UpdateSlider(inputPosition)
+        local relativeX = math.clamp((inputPosition - Track.AbsolutePosition.X) / Track.AbsoluteSize.X, 0, 1)
+        local calculatedVal = relativeX * maxVal
+        if not isFloat then calculatedVal = math.round(calculatedVal) else calculatedVal = tonumber(string.format("%.1f", calculatedVal)) end
+        Options[optionKey] = calculatedVal; Fill.Size = UDim2.new(relativeX, 0, 1, 0); ValueLabel.Text = calculatedVal .. "/" .. maxVal
+    end
+    Track.MouseButton1Down:Connect(function()
+        local mouse = LocalPlayer:GetMouse(); UpdateSlider(mouse.X)
+        local move = mouse.Move:Connect(function() UpdateSlider(mouse.X) end)
+        local endInput = UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then move:Disconnect() end end)
+    end)
+
+    table.insert(UI_Refresh_Registry, function()
+        local val = Options[optionKey] or currentVal
+        Fill.Size = UDim2.new(val / maxVal, 0, 1, 0)
+        ValueLabel.Text = val .. "/" .. maxVal
+    end)
+end
+
+local function CreateKeybind(parent, optionKey, text, posY)
+    local Wrapper = Instance.new("Frame", parent); Wrapper.BackgroundColor3 = Colors.BotonCuerpo; Wrapper.BackgroundTransparency = 0.5; Wrapper.Size = UDim2.new(1, -12, 0, 26); Wrapper.Position = UDim2.new(0, 6, 0, posY); AddOutline(Wrapper)
+    local Label = Instance.new("TextLabel", Wrapper); Label.BackgroundTransparency = 1; Label.Text = text; Label.TextColor3 = Colors.TextoClaro; Label.Font = Enum.Font.Code; Label.TextSize = 13; Label.TextXAlignment = Enum.TextXAlignment.Left; Label.Position = UDim2.new(0, 8, 0, 0); Label.Size = UDim2.new(1, -100, 1, 0)
+    local BindBtn = Instance.new("TextButton", Wrapper); BindBtn.BackgroundColor3 = Colors.BotonCuerpo; BindBtn.Text = Options[optionKey]; BindBtn.TextColor3 = Options.accent_color; BindBtn.Font = Enum.Font.Code; BindBtn.TextSize = 11; BindBtn.Size = UDim2.new(0, 90, 0, 18); BindBtn.Position = UDim2.new(1, -98, 0.5, -9); AddOutline(BindBtn)
+    RegisterAccentObject(BindBtn, "TextColor3")
+
+    local isBinding = false
+    BindBtn.MouseButton1Click:Connect(function()
+        if isBinding then return end
+        isBinding = true; BindBtn.Text = "..."
+        local connection
+        connection = UserInputService.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                local keyName = input.KeyCode.Name
+                if keyName ~= "Unknown" then
+                    Options[optionKey] = keyName; BindBtn.Text = keyName; isBinding = false; connection:Disconnect()
+                end
+            end
+        end)
+    end)
+    table.insert(UI_Refresh_Registry, function() BindBtn.Text = Options[optionKey] or "RightShift" end)
+end
+
+local function CreateCycle(parent, optionKey, text, optionsList, posY)
+    local Wrapper = Instance.new("Frame", parent); Wrapper.BackgroundColor3 = Colors.BotonCuerpo; Wrapper.BackgroundTransparency = 0.5; Wrapper.Size = UDim2.new(1, -12, 0, 26); Wrapper.Position = UDim2.new(0, 6, 0, posY); AddOutline(Wrapper)
+    local Label = Instance.new("TextLabel", Wrapper); Label.BackgroundTransparency = 1; Label.Text = text; Label.TextColor3 = Colors.TextoClaro; Label.Font = Enum.Font.Code; Label.TextSize = 13; Label.TextXAlignment = Enum.TextXAlignment.Left; Label.Position = UDim2.new(0, 8, 0, 0); Label.Size = UDim2.new(1, -100, 1, 0)
+    local Btn = Instance.new("TextButton", Wrapper); Btn.BackgroundColor3 = Colors.BotonCuerpo; Btn.Text = tostring(Options[optionKey] or optionsList[1]); Btn.TextColor3 = Options.accent_color; Btn.Font = Enum.Font.Code; Btn.TextSize = 11; Btn.Size = UDim2.new(0, 90, 0, 18); Btn.Position = UDim2.new(1, -98, 0.5, -9); AddOutline(Btn)
+    RegisterAccentObject(Btn, "TextColor3")
+    
+    Btn.MouseButton1Click:Connect(function()
+        local current = Options[optionKey]
+        local index = table.find(optionsList, current) or 1
+        index = (index % #optionsList) + 1
+        Options[optionKey] = optionsList[index]
+        Btn.Text = tostring(optionsList[index])
+    end)
+    table.insert(UI_Refresh_Registry, function() Btn.Text = tostring(Options[optionKey] or optionsList[1]) end)
+end
+
+-- ==========================================================
+-- CONFIGURACIÓN DE COLUMNAS (VISUALS TAB)
+-- ==========================================================
+local Vis_L = Instance.new("Frame", VisualPage); Vis_L.BackgroundTransparency = 1; Vis_L.Size = UDim2.new(0.5, -5, 0, 490)
+local Vis_R = Instance.new("Frame", VisualPage); Vis_R.BackgroundTransparency = 1; Vis_R.Size = UDim2.new(0.5, -5, 0, 490); Vis_R.Position = UDim2.new(0.5, 5, 0, 0)
+
+-- LADO IZQUIERDO: Configuración de Jugadores
+local PlayerSec = CreateSection(Vis_L, "ESP Players", 1, 505, 0, 0)
+CreateCheckbox(PlayerSec, "nametag", "Nametag", 2, true)
+CreateCheckbox(PlayerSec, "chams", "Chams", 32, true)
+CreateCheckbox(PlayerSec, "skeleton", "Skeleton", 62, true)
+CreateCheckbox(PlayerSec, "hp_text", "Hp Number", 92, true)
+CreateCheckbox(PlayerSec, "hp_bar", "Hp Bar", 122, false)
+CreateCheckbox(PlayerSec, "box", "Box", 152, true)
+CreateCheckbox(PlayerSec, "box_fill", "Box2D Fill", 182, true, "box_fill_color") 
+CreateCheckbox(PlayerSec, "distance", "Distance", 212, true)
+CreateCheckbox(PlayerSec, "inventory_bar", "Inventory Checker Bar", 242, false)
+CreateSlider(PlayerSec, "name_text_size", "name text size", 12, 24, 272, false)
+CreateSlider(PlayerSec, "distance_text_size", "distance text size", 12, 24, 302, false)
+CreateSlider(PlayerSec, "hp_bar_width", "hp_bar_width", 2, 6, 332, false)
+CreateSlider(PlayerSec, "chams_transparency", "Chams Transparency", 0.5, 1, 362, true)
+CreateSlider(PlayerSec, "box_fill_transparency", "Box2D Fill Transparency", 0.5, 1, 392, true)
+
+-- LADO DERECHO: Configuración de NPCs Sincronizada
+local NpcSec = CreateSection(Vis_R, "ESP NPC / AI", 1, 505, 0, 0)
+CreateCheckbox(NpcSec, "npc_nametag", "Nametag", 2, true)
+CreateCheckbox(NpcSec, "npc_chams", "Chams", 32, true)
+CreateCheckbox(NpcSec, "npc_skeleton", "Skeleton", 62, true)
+CreateCheckbox(NpcSec, "npc_hp_text", "Hp Number", 92, true)
+CreateCheckbox(NpcSec, "npc_hp_bar", "Hp Bar", 122, false)
+CreateCheckbox(NpcSec, "npc_box", "Box", 152, true)
+CreateCheckbox(NpcSec, "npc_box_fill", "Box2D Fill", 182, true, "npc_box_fill_color") 
+CreateCheckbox(NpcSec, "npc_distance", "Distance", 212, true, "npc_distance_color")
+CreateSlider(NpcSec, "npc_name_text_size", "name text size", 12, 24, 272, false)
+CreateSlider(NpcSec, "npc_distance_text_size", "distance text size", 12, 24, 302, false)
+CreateSlider(NpcSec, "npc_hp_bar_width", "hp_bar_width", 2, 6, 332, false)
+CreateSlider(NpcSec, "npc_chams_transparency", "Chams Transparency", 0.5, 1, 362, true)
+CreateSlider(NpcSec, "npc_box_fill_transparency", "Box2D Fill Transparency", 0.5, 1, 392, true)
+
+-- ==========================================================
+-- ESTRUCTURACIÓN DE LA PÁGINA COMBAT
+-- ==========================================================
+local Combat_L = Instance.new("ScrollingFrame", CombatPage)
+Combat_L.BackgroundTransparency = 1; Combat_L.Size = UDim2.new(0.5, -5, 1, 0); Combat_L.CanvasSize = UDim2.new(0, 0, 0, 1025); Combat_L.ScrollBarThickness = 4; Combat_L.ScrollBarImageColor3 = Options.accent_color; RegisterAccentObject(Combat_L, "ScrollBarImageColor3")
+local Combat_R = Instance.new("Frame", CombatPage); Combat_R.BackgroundTransparency = 1; Combat_R.Size = UDim2.new(0.5, -5, 1, 0); Combat_R.Position = UDim2.new(0.5, 5, 0, 0)
+
+local SilentAimSec = CreateSection(Combat_L, "Silent Aim", 1, 335, 0, 0)
+CreateCheckbox(SilentAimSec, "silent_aim", "Silent Aim", 2, false)
+CreateCycle(SilentAimSec, "silent_aim_target_part", "Target Part", {"Head", "Torso", "HumanoidRootPart"}, 32)
+CreateCheckbox(SilentAimSec, "silent_aim_visible_check", "Visible Check", 62, false)
+CreateCheckbox(SilentAimSec, "silent_aim_target_ai", "Target AI", 92, false)
+CreateCheckbox(SilentAimSec, "silent_aim_target_heli", "Target Heli", 122, false)
+CreateCheckbox(SilentAimSec, "silent_aim_hide_visor", "Hide Visor", 152, false)
+CreateCheckbox(SilentAimSec, "silent_aim_bullet_tracers", "Silent Aim Bullet Tracers", 182, true, "silent_aim_tracer_color")
+CreateSlider(SilentAimSec, "silent_aim_tracer_time", "Tracer Time To Target", 0, 10, 222, false)
+CreateCycle(SilentAimSec, "silent_aim_whitelist", "Whitelist Players", {"-", "Friends", "All"}, 262)
+
+local RageSec = CreateSection(Combat_L, "Rage", 1, 305, 0, 345)
+CreateCheckbox(RageSec, "rage_autoshoot", "AutoShoot Keybind", 2, false)
+CreateKeybind(RageSec, "rage_autoshoot_key", "AutoShoot Bind", 32)
+CreateCheckbox(RageSec, "rage_hitscan", "Hitscan", 62, false)
+CreateCheckbox(RageSec, "rage_autoreload", "Auto Reload", 92, false)
+CreateCheckbox(RageSec, "rage_autofill", "Auto Fill Mags", 122, false)
+CreateCheckbox(RageSec, "rage_instanthit", "Instant Hit", 152, false)
+CreateCheckbox(RageSec, "rage_ragebot", "Ragebot", 182, false)
+CreateCheckbox(RageSec, "rage_desync", "Show Desynced Movement(better)", 212, false)
+CreateCheckbox(RageSec, "rage_resolver", "Underground Resolver", 242, false)
+
+local GunModsSec = CreateSection(Combat_L, "Gun Mods", 1, 345, 0, 665)
+CreateCheckbox(GunModsSec, "gun_force_auto", "Force Auto", 2, false)
+CreateCheckbox(GunModsSec, "gun_no_sway", "No Sway", 32, false)
+CreateCheckbox(GunModsSec, "gun_always_grounded", "Always Grounded", 62, false)
+CreateCheckbox(GunModsSec, "gun_always_sprinting", "Always Sprinting", 92, false)
+CreateCheckbox(GunModsSec, "gun_rapid_fire", "Rapid Fire", 122, false)
+CreateCheckbox(GunModsSec, "gun_instant_aim", "Instant Aim", 152, false)
+CreateCheckbox(GunModsSec, "gun_no_recoil", "No Recoil", 182, false)
+CreateCheckbox(GunModsSec, "gun_remove_effects", "Remove Effects", 212, false)
+CreateCheckbox(GunModsSec, "gun_remove_headbob", "Remove Headbob", 242, false)
+CreateCheckbox(GunModsSec, "gun_multi_bullet", "Multi Bullet", 272, false)
+CreateSlider(GunModsSec, "gun_bullet_amount", "Bullet Amount", 1, 10, 302, false)
+
+local ScreenVisSec = CreateSection(Combat_R, "Screen Visuals", 1, 415, 0, 0)
+CreateCheckbox(ScreenVisSec, "sv_target_info", "Show Target Info", 2, false)
+CreateCheckbox(ScreenVisSec, "sv_target_hotbar", "Show Target Hotbar", 32, false)
+CreateCheckbox(ScreenVisSec, "sv_indicator", "Indicator", 62, false)
+CreateCheckbox(ScreenVisSec, "sv_follow_mouse", "Follow Mouse", 92, false)
+CreateCheckbox(ScreenVisSec, "sv_target_line", "Target Line", 122, true, "sv_target_line_color")
+CreateCheckbox(ScreenVisSec, "sv_silent_aim_fov", "Silent Aim FOV", 152, false)
+CreateCheckbox(ScreenVisSec, "sv_filled_fov", "Filled Fov", 182, false)
+CreateSlider(ScreenVisSec, "sv_fov_transparency", "FOV Transparency", 0, 1, 212, true)
+CreateCheckbox(ScreenVisSec, "sv_lerp_visuals", "Lerp Visuals", 252, false)
+CreateCheckbox(ScreenVisSec, "sv_fov_outline", "Fov Outline", 282, true, "sv_fov_outline_color")
+CreateCheckbox(ScreenVisSec, "sv_fov_filled_color_toggle", "Fov Filled Color", 312, true, "sv_fov_filled_color")
+CreateSlider(ScreenVisSec, "sv_fov_circle_size", "FOV Circle Size", 0, 800, 342, false)
+CreateCheckbox(ScreenVisSec, "sv_fov_circle_color_toggle", "Fov Circle Color", 382, true, "sv_fov_circle_color")
+
+-- ==========================================================
+-- UI SETTINGS & CONFIGS
+-- ==========================================================
+local UIS_L = Instance.new("Frame", UISettingsPage); UIS_L.BackgroundTransparency = 1; UIS_L.Size = UDim2.new(0.5, -5, 1, 0)
+local UIS_R = Instance.new("Frame", UISettingsPage); UIS_R.BackgroundTransparency = 1; UIS_R.Size = UDim2.new(0.5, -5, 1, 0); UIS_R.Position = UDim2.new(0.5, 5, 0, 0)
+
+local SettingsSec = CreateSection(UIS_R, "UI Settings", 1, 200, 0, 0)
+CreateCheckbox(SettingsSec, "accent_color", "UI Color", 2, true, "accent_color")
+CreateCheckbox(SettingsSec, "performance_mode", "Performance Mode", 32, false)
+CreateKeybind(SettingsSec, "menu_key", "Minimize Keybind", 62)
+
+local ConfigSec = CreateSection(UIS_L, "Save Configurations", 1, 145, 0, 0)
+local NameBox = Instance.new("TextBox", ConfigSec); NameBox.Size = UDim2.new(1, -38, 0, 26); NameBox.Position = UDim2.new(0, 6, 0, 10); NameBox.BackgroundColor3 = Colors.BotonCuerpo; NameBox.Text = "config_default"; NameBox.TextColor3 = Colors.TextoClaro; NameBox.Font = Enum.Font.Code; NameBox.TextSize = 12; AddOutline(NameBox)
+local DropdownBtn = Instance.new("TextButton", ConfigSec); DropdownBtn.Size = UDim2.new(0, 20, 0, 26); DropdownBtn.Position = UDim2.new(1, -26, 0, 10); DropdownBtn.BackgroundColor3 = Colors.BotonCuerpo; DropdownBtn.Text = "▼"; DropdownBtn.TextColor3 = Colors.GrisTexto; DropdownBtn.Font = Enum.Font.Code; DropdownBtn.TextSize = 10; AddOutline(DropdownBtn)
+local SaveBtn = Instance.new("TextButton", ConfigSec); SaveBtn.Size = UDim2.new(0.5, -9, 0, 26); SaveBtn.Position = UDim2.new(0, 6, 0, 46); SaveBtn.BackgroundColor3 = Colors.BotonCuerpo; SaveBtn.Text = "SAVE SCRIPT"; SaveBtn.TextColor3 = Colors.TextoClaro; SaveBtn.Font = Enum.Font.Code; SaveBtn.TextSize = 11; AddOutline(SaveBtn)
+local LoadBtn = Instance.new("TextButton", ConfigSec); LoadBtn.Size = UDim2.new(0.5, -9, 0, 26); LoadBtn.Position = UDim2.new(0.5, 3, 0, 46); LoadBtn.BackgroundColor3 = Colors.BotonCuerpo; LoadBtn.Text = "LOAD SCRIPT"; LoadBtn.TextColor3 = Colors.TextoClaro; LoadBtn.Font = Enum.Font.Code; LoadBtn.TextSize = 11; AddOutline(LoadBtn)
+
+local AutoLoadWrap = Instance.new("Frame", ConfigSec); AutoLoadWrap.BackgroundColor3 = Colors.BotonCuerpo; AutoLoadWrap.BackgroundTransparency = 0.5; AutoLoadWrap.Size = UDim2.new(1, -12, 0, 26); AutoLoadWrap.Position = UDim2.new(0, 6, 0, 82); AddOutline(AutoLoadWrap)
+local AutoLoadBox = Instance.new("TextButton", AutoLoadWrap); AutoLoadBox.BackgroundColor3 = Colors.BotonCuerpo; AutoLoadBox.Text = ""; AutoLoadBox.Size = UDim2.new(0, 14, 0, 14); AutoLoadBox.Position = UDim2.new(0, 8, 0.5, -7); AddOutline(AutoLoadBox)
+local AutoLoadMark = Instance.new("Frame", AutoLoadBox); AutoLoadMark.BackgroundColor3 = Options.accent_color; AutoLoadMark.BorderSizePixel = 0; AutoLoadMark.Size = UDim2.new(1, -6, 1, -6); AutoLoadMark.Position = UDim2.new(0, 3, 0, 3); AutoLoadMark.Visible = isfile("DylRatPD/autoload.txt"); RegisterAccentObject(AutoLoadMark, "BackgroundColor3")
+local AutoLoadLabel = Instance.new("TextLabel", AutoLoadWrap); AutoLoadLabel.BackgroundTransparency = 1; AutoLoadLabel.Text = "AUTO LOAD SETTINGS"; AutoLoadLabel.TextColor3 = Colors.TextoClaro; AutoLoadLabel.Font = Enum.Font.Code; AutoLoadLabel.TextSize = 12; AutoLoadLabel.TextXAlignment = Enum.TextXAlignment.Left; AutoLoadLabel.Position = UDim2.new(0, 35, 0, 0); AutoLoadLabel.Size = UDim2.new(1, -40, 1, 0)
+
+local DropdownFrame = Instance.new("ScrollingFrame", PetalMenuGui); DropdownFrame.Name = "ConfigDropdown"; DropdownFrame.BackgroundColor3 = Colors.Background; DropdownFrame.Size = UDim2.new(0, 170, 0, 112); DropdownFrame.Visible = false; DropdownFrame.ZIndex = 600; DropdownFrame.CanvasSize = UDim2.new(0, 0, 0, 0); DropdownFrame.ScrollBarThickness = 4; AddOutline(DropdownFrame)
+local DropListLayout = Instance.new("UIListLayout", DropdownFrame)
+
+DropdownBtn.MouseButton1Click:Connect(function()
+    DropdownFrame.Visible = not DropdownFrame.Visible
+    if DropdownFrame.Visible then
+        DropdownFrame.Position = UDim2.new(0, NameBox.AbsolutePosition.X, 0, NameBox.AbsolutePosition.Y + NameBox.AbsoluteSize.Y + 3)
+        for _, child in ipairs(DropdownFrame:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+        if isfolder("DylRatPD") then
+            local files = listfiles("DylRatPD"); local count = 0
+            for _, file in ipairs(files) do
+                if file:sub(-4) == ".lua" then
+                    local name = file:match("([^/\\]+)%.lua$") or file; count = count + 1
+                    local Btn = Instance.new("TextButton", DropdownFrame); Btn.Size = UDim2.new(1, 0, 0, 22); Btn.BackgroundColor3 = Colors.BotonCuerpo; Btn.Text = "  " .. name; Btn.TextColor3 = Colors.TextoClaro; Btn.Font = Enum.Font.Code; Btn.TextSize = 11; Btn.TextXAlignment = Enum.TextXAlignment.Left; Btn.ZIndex = 601
+                    Btn.MouseButton1Click:Connect(function()
+                        NameBox.Text = name; DropdownFrame.Visible = false
+                        if isfile("DylRatPD/autoload.txt") and readfile("DylRatPD/autoload.txt") == name then AutoLoadMark.Visible = true else AutoLoadMark.Visible = false end
+                    end)
+                end
+            end
+            DropdownFrame.CanvasSize = UDim2.new(0, 0, 0, count * 22)
+        end
+    end
+end)
+
+local function LoadConfigLogic(cfgName)
+    local filePath = "DylRatPD/" .. cfgName .. ".lua"
+    if isfile(filePath) then
+        pcall(function()
+            local content = readfile(filePath); local decoded = HttpService:JSONDecode(content)
+            if decoded then
+                for k, v in pairs(decoded) do
+                    if type(v) == "table" and v[4] == "__isColor3" then Options[k] = Color3.new(v[1], v[2], v[3]) else Options[k] = v end
+                end
+                for _, refreshFunc in ipairs(UI_Refresh_Registry) do pcall(refreshFunc) end
+            end
+        end)
+    end
+end
+
+SaveBtn.MouseButton1Click:Connect(function()
+    local cfgName = NameBox.Text
+    if cfgName ~= "" then
+        pcall(function()
+            if not isfolder("DylRatPD") then makefolder("DylRatPD") end
+            local configTable = {}
+            for k, v in pairs(Options) do if typeof(v) == "Color3" then configTable[k] = {v.R, v.G, v.B, "__isColor3"} else configTable[k] = v end end
+            writefile("DylRatPD/" .. cfgName .. ".lua", HttpService:JSONEncode(configTable))
+            if AutoLoadMark.Visible then writefile("DylRatPD/autoload.txt", cfgName) end
+        end)
+    end
+end)
+
+LoadBtn.MouseButton1Click:Connect(function()
+    if NameBox.Text ~= "" then
+        LoadConfigLogic(NameBox.Text)
+        if isfile("DylRatPD/autoload.txt") and readfile("DylRatPD/autoload.txt") == NameBox.Text then AutoLoadMark.Visible = true else AutoLoadMark.Visible = false end
+    end
+end)
+
+AutoLoadBox.MouseButton1Click:Connect(function()
+    if isfile("DylRatPD/autoload.txt") and readfile("DylRatPD/autoload.txt") == NameBox.Text then
+        delfile("DylRatPD/autoload.txt"); AutoLoadMark.Visible = false
+    else
+        if NameBox.Text ~= "" then if not isfolder("DylRatPD") then makefolder("DylRatPD") end; writefile("DylRatPD/autoload.txt", NameBox.Text); AutoLoadMark.Visible = true end
+    end
+end)
+
+-- ==========================================================
+-- WORLD TAB SETTINGS
+-- ==========================================================
+local Wor_L = Instance.new("Frame", WorldPage); Wor_L.BackgroundTransparency = 1; Wor_L.Size = UDim2.new(0.5, -5, 1, 0)
+local Wor_R = Instance.new("Frame", WorldPage); Wor_R.BackgroundTransparency = 1; Wor_R.Size = UDim2.new(0.5, -5, 1, 0); Wor_R.Position = UDim2.new(0.5, 5, 0, 0)
+
+local WorldSec = CreateSection(Wor_L, "World", 1, 260, 0, 0)
+CreateCheckbox(WorldSec, "no_grass", "Remove Grass", 2, false)
+CreateCheckbox(WorldSec, "no_leafs", "No Leafs", 32, false)
+CreateCheckbox(WorldSec, "no_clouds", "No Clouds", 62, false)
+CreateCheckbox(WorldSec, "full_brightness", "Full Brightness", 92, false)
+CreateCheckbox(WorldSec, "no_fog", "No Fog", 122, false)
+
+local XrayWrap = Instance.new("Frame", WorldSec); XrayWrap.BackgroundColor3 = Colors.BotonCuerpo; XrayWrap.BackgroundTransparency = 0.5; XrayWrap.Size = UDim2.new(1, -12, 0, 26); XrayWrap.Position = UDim2.new(0, 6, 0, 152); AddOutline(XrayWrap)
+local XrayBox = Instance.new("TextButton", XrayWrap); XrayBox.BackgroundColor3 = Colors.BotonCuerpo; XrayBox.Text = ""; XrayBox.Size = UDim2.new(0, 14, 0, 14); XrayBox.Position = UDim2.new(0, 8, 0.5, -7); AddOutline(XrayBox)
+local XrayMark = Instance.new("Frame", XrayBox); XrayMark.BackgroundColor3 = Options.accent_color; XrayMark.BorderSizePixel = 0; XrayMark.Size = UDim2.new(1, -6, 1, -6); XrayMark.Position = UDim2.new(0, 3, 0, 3); XrayMark.Visible = Options.xray; RegisterAccentObject(XrayMark, "BackgroundColor3")
+local XrayLabel = Instance.new("TextLabel", XrayWrap); XrayLabel.BackgroundTransparency = 1; XrayLabel.Text = "Xray"; XrayLabel.TextColor3 = Colors.TextoClaro; XrayLabel.Font = Enum.Font.Code; XrayLabel.TextSize = 13; XrayLabel.TextXAlignment = Enum.TextXAlignment.Left; XrayLabel.Position = UDim2.new(0, 35, 0, 0); XrayLabel.Size = UDim2.new(1, -150, 1, 0)
+XrayBox.MouseButton1Click:Connect(function() Options.xray = not Options.xray; XrayMark.Visible = Options.xray end)
+
+local TimeSec = CreateSection(Wor_L, "Time Changer", 1, 100, 0, 275)
+CreateCheckbox(TimeSec, "time_changer_enabled", "Time Changer", 2, false)
+CreateSlider(TimeSec, "time_value", "Time", 0, 24000, 40, false)
+
+UserInputService.InputBegan:Connect(function(input, processed)
+    if not processed then
+        local success, allowedKey = pcall(function() return Enum.KeyCode[Options.menu_key] end)
+        if success and input.KeyCode == allowedKey then
+            MainFrame.Visible = not MainFrame.Visible; ColorPickerFrame.Visible = false; DropdownFrame.Visible = false
+        end
+    end
+end)
+
+-- ==========================================================
+-- BACKGROUND COROUTINES (WORLD MODS & NPC DETECTOR)
+-- ==========================================================
+task.spawn(function()
+    while true do
+        local tempNPCs = {}
+        pcall(function()
+            for _, v in ipairs(workspace:GetDescendants()) do
+                if v:IsA("Humanoid") then
+                    local model = v.Parent
+                    if model and model:IsA("Model") and model ~= LocalPlayer.Character then
+                        if model:FindFirstChild("HumanoidRootPart") then
+                            if not Players:GetPlayerFromCharacter(model) then table.insert(tempNPCs, model) end
+                        end
+                    end
+                end
+            end
+        end)
+        DetectedNPCs = tempNPCs; task.wait(2.0)
+    end
+end)
+
+task.spawn(function()
+    while true do
+        if Options.no_grass ~= LastStates.no_grass then LastStates.no_grass = Options.no_grass; pcall(function() workspace.Terrain.Decoration = not Options.no_grass end) end
+        if Options.no_clouds ~= LastStates.no_clouds then
+            LastStates.no_clouds = Options.no_clouds
+            pcall(function()
+                local cl = workspace:FindFirstChildOfClass("Clouds") or Lighting:FindFirstChildOfClass("Clouds")
+                if cl then cl.Enabled = not Options.no_clouds end
+            end)
+        end
+        if Options.full_brightness ~= LastStates.full_brightness then
+            LastStates.full_brightness = Options.full_brightness
+            pcall(function()
+                if Options.full_brightness then
+                    Lighting.Ambient = Color3.new(1, 1, 1); Lighting.OutdoorAmbient = Color3.new(1, 1, 1); Lighting.GlobalShadows = false; Lighting.Brightness = 3
+                else
+                    Lighting.Ambient = Color3.new(0.3, 0.3, 0.3); Lighting.OutdoorAmbient = Color3.new(0.35, 0.35, 0.4); Lighting.GlobalShadows = true; Lighting.Brightness = 2
+                end
+            end)
+        end
+        if Options.no_fog ~= LastStates.no_fog then LastStates.no_fog = Options.no_fog; pcall(function() Lighting.FogEnd = Options.no_fog and 1000000 or 500 end) end
+        if Options.time_changer_enabled then
+            if Options.time_value ~= LastStates.time_value or not LastStates.time_changer_enabled then
+                LastStates.time_changer_enabled = true; LastStates.time_value = Options.time_value
+                pcall(function() Lighting.ClockTime = Options.time_value / 1000 end)
+            end
+        elseif LastStates.time_changer_enabled then LastStates.time_changer_enabled = false; LastStates.time_value = nil end
+        
+        if Options.xray ~= LastStates.xray then
+            LastStates.xray = Options.xray
+            pcall(function()
+                for _, v in ipairs(workspace:GetDescendants()) do
+                    if v:IsA("BasePart") and not v:IsDescendantOf(LocalPlayer.Character) and not v.Parent:FindFirstChildOfClass("Humanoid") and v.Name ~= "Terrain" then
+                        v.LocalTransparencyModifier = Options.xray and 0.6 or 0
+                    end
+                end
+            end)
+        end
+        task.wait(0.3)
+    end
+end)
+
+-- ==========================================================
+-- ACTUALIZACIÓN DE BARRA DE INVENTARIO (REAL PATH DESDE REPLICATED)
+-- ==========================================================
+local currentInvTarget = nil
+local lastInvRefresh = 0
+
+local function RefreshInventoryBar(targetPlayer)
+    -- Limpieza total de slots anteriores
+    for _, child in ipairs(InvBarContainer:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+
+    if not targetPlayer then return end
+    
+    -- BUSQUEDA EN LA RUTA REAL SEGÚN TUS CAPTURAS DE REPLICATEDSTORAGE
+    local repPlayers = ReplicatedStorage:FindFirstChild("Players")
+    if not repPlayers then return end
+    
+    local targetFolder = repPlayers:FindFirstChild(targetPlayer.Name)
+    if not targetFolder then return end
+    
+    local inv = targetFolder:FindFirstChild("Inventory")
+    if not inv then return end
+
+    local slotCount = 0
+
+    -- Recorremos dinámicamente TODO lo que el jugador tiene en su base de datos real
+    for _, item in ipairs(inv:GetChildren()) do
+        local hasItem = false
+        local itemText = ""
+        
+        if item:IsA("BoolValue") and item.Value == true then 
+            hasItem = true
+            itemText = item.Name
+        elseif (item:IsA("IntValue") or item:IsA("NumberValue")) and item.Value > 0 then 
+            hasItem = true
+            itemText = item.Name .. "\n(" .. tostring(item.Value) .. ")"
+        elseif item:IsA("StringValue") and item.Value ~= "" then
+            hasItem = true
+            itemText = item.Value
+        end
+
+        if hasItem then
+            slotCount = slotCount + 1
+            
+            -- Cuadro del slot principal (Diseño oscuro translúcido compacto de la captura)
+            local slot = Instance.new("Frame", InvBarContainer)
+            slot.Size = UDim2.new(0, 48, 0, 48)
+            slot.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+            slot.BackgroundTransparency = 0.15
+            slot.BorderSizePixel = 0
+            
+            local slotStroke = Instance.new("UIStroke", slot)
+            slotStroke.Color = Color3.fromRGB(50, 50, 50)
+            slotStroke.Thickness = 1
+            slotStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+            -- Texto estilizado para el nombre limpio de los ítems
+            local lbl = Instance.new("TextLabel", slot)
+            lbl.Size = UDim2.new(1, -4, 1, -4)
+            lbl.Position = UDim2.new(0, 2, 0, 2)
+            lbl.BackgroundTransparency = 1
+            lbl.TextColor3 = Color3.fromRGB(225, 225, 225)
+            lbl.Font = Enum.Font.Code
+            lbl.TextSize = 8
+            lbl.TextWrapped = true
+            lbl.TextXAlignment = Enum.TextXAlignment.Center
+            lbl.TextYAlignment = Enum.TextYAlignment.Center
+            
+            -- Limpieza de prefijos del sistema para maximizar legibilidad en el slot
+            local cleanName = itemText:gsub("Clothing", ""):gsub("Equipment", ""):gsub("Item", ""):gsub("Weapon", "")
+            lbl.Text = cleanName:upper()
+        end
+    end
+    
+    -- Ajuste dinámico de tamaño para habilitar scroll si la persona está cargada de cosas
+    InvBarContainer.CanvasSize = UDim2.new(0, slotCount * 53, 0, 0)
+end
+
+-- ==========================================================
+-- PIPELINE ESP CORE Y ACTUALIZADOR DE INVENTARIO
+-- ==========================================================
+RunService.RenderStepped:Connect(function()
+    local dynamicColor = GetColor("accent_color")
+    for _, item in ipairs(AccentObjects) do pcall(function() item.Instance[item.Property] = dynamicColor end) end
+    if ActiveTabButton then pcall(function() ActiveTabButton.TextColor3 = dynamicColor end) end
+    for key, sq in pairs(ColorSquares) do pcall(function() sq.BackgroundColor3 = GetColor(key) end) end
+    
+    local Targets = {}
+    for _, p in ipairs(Players:GetPlayers()) do if p ~= LocalPlayer and p.Character then table.insert(Targets, {Type = "Player", Char = p.Character, Obj = p}) end end
+    for _, npc in ipairs(DetectedNPCs) do if npc and npc.Parent and npc:FindFirstChildOfClass("Humanoid") and npc:FindFirstChild("HumanoidRootPart") then table.insert(Targets, {Type = "NPC", Char = npc, Obj = npc}) end end
+    
+    for cachedObj, _ in pairs(ESP_Cache) do
+        local isStillValid = false
+        for _, t in ipairs(Targets) do if t.Obj == cachedObj then isStillValid = true; break end end
+        if not isStillValid then CleanESP(cachedObj) end
+    end
+    
+    for _, target in ipairs(Targets) do
+        local isNpc = (target.Type == "NPC")
+        local char = target.Char
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local data = ESP_Cache[target.Obj] or CreateESP(target.Obj)
+        
+        if hum and hrp then
+            local maxHp = char:GetAttribute("MaxHealth") or hum:GetAttribute("MaxHealth") or hum.MaxHealth or 100
+            local curHp = char:GetAttribute("Health") or hum:GetAttribute("Health") or hum.Health or 0
+            local factor = math.clamp(curHp / maxHp, 0, 1)
+            local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+            
+            -- CHAMS
+            local optChams = if isNpc then Options.npc_chams else Options.chams
+            if optChams and curHp > 0 then
+                data.Chams.Adornee = char
+                data.Chams.Enabled = true
+                data.Chams.FillColor = GetColor(if isNpc then "npc_chams_color" else "chams_color")
+                data.Chams.FillTransparency = if isNpc then Options.npc_chams_transparency else (Options.chams_transparency or 0.5)
+            else
+                data.Chams.Enabled = false
+            end
+            
+            if onScreen and curHp > 0 then
+                local sizeY = (Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0)).Y - Camera:WorldToViewportPoint(hrp.Position + Vector3.new(0, 2.6, 0)).Y)
+                local boxSize = Vector2.new(sizeY / 1.5, sizeY)
+                local boxPos = Vector2.new(pos.X - boxSize.X / 2, pos.Y - boxSize.Y / 2)
+                
+                -- BOX 2D
+                local optBox = if isNpc then Options.npc_box else Options.box
+                data.Box.Visible = optBox
+                if optBox then 
+                    data.Box.Size = UDim2.new(0, boxSize.X, 0, boxSize.Y)
+                    data.Box.Position = UDim2.new(0, boxPos.X, 0, boxPos.Y)
+                    data.BoxOutline.Color = GetColor(if isNpc then "npc_box_color" else "box_color")
+                    
+                    local optBoxFill = if isNpc then Options.npc_box_fill else Options.box_fill
+                    if optBoxFill then
+                        data.Box.BackgroundColor3 = GetColor(if isNpc then "npc_box_fill_color" else "box_fill_color")
+                        data.Box.BackgroundTransparency = if isNpc then Options.npc_box_fill_transparency else (Options.box_fill_transparency or 0.5)
+                    else
+                        data.Box.BackgroundTransparency = 1
+                    end
+                end
+                
+                -- NAMETAG
+                local optName = if isNpc then Options.npc_nametag else Options.nametag
+                data.Name.Visible = optName
+                if optName then 
+                    data.Name.Text = if isNpc then "[BOT] " .. char.Name else target.Obj.Name
+                    data.Name.Position = UDim2.new(0, boxPos.X, 0, boxPos.Y - 14)
+                    data.Name.Size = UDim2.new(0, boxSize.X, 0, 12)
+                    data.Name.TextSize = if isNpc then Options.npc_name_text_size else (Options.name_text_size or 12)
+                    data.Name.TextColor3 = GetColor(if isNpc then "npc_nametag_color" else "nametag_color") 
+                end
+                
+                -- HP BAR
+                local optHpBar = if isNpc then Options.npc_hp_bar else Options.hp_bar
+                data.HPBarBack.Visible = optHpBar
+                if optHpBar then 
+                    data.HPBarBack.Position = UDim2.new(0, boxPos.X - 6, 0, boxPos.Y)
+                    data.HPBarBack.Size = UDim2.new(0, if isNpc then Options.npc_hp_bar_width else (Options.hp_bar_width or 2), 0, boxSize.Y)
+                    data.HPBarFill.Visible = true
+                    data.HPBarFill.BackgroundColor3 = Color3.fromRGB(255, 0, 0):Lerp(Color3.fromRGB(0, 255, 0), factor)
+                    data.HPBarFill.Size = UDim2.new(1, 0, factor, 0)
+                    data.HPBarFill.Position = UDim2.new(0, 0, 1 - factor, 0)
+                else
+                    data.HPBarFill.Visible = false
+                end
+                
+                -- HP TEXT
+                local optHpText = if isNpc then Options.npc_hp_text else Options.hp_text
+                data.HPText.Visible = optHpText
+                if optHpText then
+                    data.HPText.Text = math.round(curHp) .. " HP"
+                    data.HPText.Position = UDim2.new(0, boxPos.X + boxSize.X + 4, 0, boxPos.Y)
+                    data.HPText.Size = UDim2.new(0, 50, 0, 12)
+                    data.HPText.TextXAlignment = Enum.TextXAlignment.Left
+                    data.HPText.TextColor3 = GetColor(if isNpc then "npc_hp_text_color" else "hp_text_color")
+                end
+                
+                -- DISTANCIA
+                local optDist = if isNpc then Options.npc_distance else Options.distance
+                data.Dist.Visible = optDist
+                if optDist then
+                    local distance = math.round((Camera.CFrame.Position - hrp.Position).Magnitude)
+                    data.Dist.Text = distance .. "m"
+                    data.Dist.Position = UDim2.new(0, boxPos.X, 0, boxPos.Y + boxSize.Y + 2)
+                    data.Dist.Size = UDim2.new(0, boxSize.X, 0, 12)
+                    data.Dist.TextSize = if isNpc then Options.npc_distance_text_size else (Options.distance_text_size or 12)
+                    data.Dist.TextColor3 = GetColor(if isNpc then "npc_distance_color" else "distance_color")
+                end
+                
+                -- SKELETON
+                local optSkeleton = if isNpc then Options.npc_skeleton else Options.skeleton
+                if optSkeleton then
+                    local rigType = hum.RigType.Name
+                    local bonesTable = SkeletonBones[rigType]
+                    if bonesTable then
+                        local lineIndex = 1
+                        for _, bonePair in ipairs(bonesTable) do
+                            local part1 = char:FindFirstChild(bonePair[1])
+                            local part2 = char:FindFirstChild(bonePair[2])
+                            if part1 and part2 then
+                                local pos1, vis1 = Camera:WorldToViewportPoint(part1.Position)
+                                local pos2, vis2 = Camera:WorldToViewportPoint(part2.Position)
+                                if vis1 or vis2 then
+                                    local line = data.Lines[lineIndex]
+                                    if not line then
+                                        line = Instance.new("Frame", MasterESP); line.BorderSizePixel = 0; line.AnchorPoint = Vector2.new(0.5, 0.5); data.Lines[lineIndex] = line
+                                    end
+                                    line.Visible = true
+                                    line.BackgroundColor3 = GetColor(if isNpc then "npc_skeleton_color" else "skeleton_color")
+                                    local center = Vector2.new((pos1.X + pos2.X) / 2, (pos1.Y + pos2.Y) / 2)
+                                    local dist = (Vector2.new(pos1.X, pos1.Y) - Vector2.new(pos2.X, pos2.Y)).Magnitude
+                                    local angle = math.deg(math.atan2(pos2.Y - pos1.Y, pos2.X - pos1.X))
+                                    line.Position = UDim2.new(0, center.X, 0, center.Y)
+                                    line.Size = UDim2.new(0, dist, 0, 1)
+                                    line.Rotation = angle
+                                    lineIndex = lineIndex + 1
+                                end
+                            end
+                        end
+                        for i = lineIndex, #data.Lines do data.Lines[i].Visible = false end
+                    end
+                else
+                    for _, line in ipairs(data.Lines) do line.Visible = false end
+                end
+            else
+                for _, obj in pairs(data) do if typeof(obj) == "Instance" and obj:IsA("GuiObject") then obj.Visible = false end end
+                for _, line in ipairs(data.Lines) do line.Visible = false end
+            end
+        end
+    end
+    
+    -- ==========================================================
+    -- SELECCIÓN POR MOUSE E IMPRESIÓN DE INVENTARIO COMPLETO
+    -- ==========================================================
+    if Options.inventory_bar then
+        local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+        local closestTarget = nil
+        local shortestDist = 180 -- Rango de proximidad del ratón
+        
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local pos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
+                if onScreen then
+                    local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                    if dist < shortestDist then
+                        shortestDist = dist
+                        closestTarget = player
+                    end
+                end
+            end
+        end
+        
+        if closestTarget then
+            local pos, _ = Camera:WorldToViewportPoint(closestTarget.Character.HumanoidRootPart.Position)
+            TargetCircle.Position = UDim2.new(0, pos.X, 0, pos.Y)
+            TargetCircle.Visible = true
+            InvBarContainer.Visible = true
+            
+            -- Refresca cada 0.8s o si cambiaste de objetivo para no generar lag
+            if currentInvTarget ~= closestTarget or (tick() - lastInvRefresh > 0.8) then
+                currentInvTarget = closestTarget
+                lastInvRefresh = tick()
+                RefreshInventoryBar(closestTarget)
+            end
+        else
+            TargetCircle.Visible = false
+            InvBarContainer.Visible = false
+            if currentInvTarget ~= nil then
+                currentInvTarget = nil
+                RefreshInventoryBar(nil)
+            end
+        end
+    else
+        TargetCircle.Visible = false
+        InvBarContainer.Visible = false
+        if currentInvTarget ~= nil then
+            currentInvTarget = nil
+            RefreshInventoryBar(nil)
+        end
+    end
+end)
+
+pcall(function()
+    if isfile("DylRatPD/autoload.txt") then
+        local autoConfig = readfile("DylRatPD/autoload.txt")
+        if autoConfig and isfile("DylRatPD/" .. autoConfig .. ".lua") then LoadConfigLogic(autoConfig); NameBox.Text = autoConfig; AutoLoadMark.Visible = true end
+    end
+end)
